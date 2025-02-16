@@ -4,11 +4,17 @@ import { useState, useEffect, useCallback } from "react";
 import { Grid } from "react-virtualized";
 import "react-virtualized/styles.css";
 
-const rowCount = 100;
-const columnCount = 100;
+const rowCount = process.env.NEXT_PUBLIC_ROW_COUNT
+  ? parseInt(process.env.NEXT_PUBLIC_ROW_COUNT)
+  : 100;
+const columnCount = process.env.NEXT_PUBLIC_COLUMN_COUNT
+  ? parseInt(process.env.NEXT_PUBLIC_COLUMN_COUNT)
+  : 100;
+
 const cellHeight = 35;
 const cellWidth = 100;
 
+// Convert column index to Excel-style column labels (A, B, C...Z, AA, AB...)
 const getColumnLabel = (index) => {
   let label = "";
   while (index >= 0) {
@@ -18,6 +24,7 @@ const getColumnLabel = (index) => {
   return label;
 };
 
+// Convert Excel-like cell reference (A1, B2) to row/col index, skipping headers
 const parseCellReference = (cellRef) => {
   const match = cellRef.match(/([A-Z]+)([0-9]+)/);
   if (!match) return null;
@@ -36,6 +43,7 @@ const parseCellReference = (cellRef) => {
   return { row: rowIndex + 1, col: columnIndex + 1 };
 };
 
+// Evaluates a formula and replaces cell references with their values
 const evaluateFormula = (formula, cellData, seen = new Set()) => {
   if (!formula.startsWith("="))
     return isNaN(formula) ? formula : parseFloat(formula);
@@ -45,10 +53,10 @@ const evaluateFormula = (formula, cellData, seen = new Set()) => {
     if (!cellRef) return "0";
 
     const key = `${cellRef.row}:${cellRef.col}`;
-    if (seen.has(key)) return "0";
+    if (seen.has(key)) return "0"; // Prevent circular references
     seen.add(key);
 
-    return cellData[key]?.value || 0;
+    return cellData[key]?.value || 0; // Directly use computed value
   });
 
   try {
@@ -64,7 +72,7 @@ export default function VirtualizedGrid() {
   const [editingCell, setEditingCell] = useState(null);
   const [inputValue, setInputValue] = useState("");
   const [historyCell, setHistoryCell] = useState(null);
-  const currentUser = "User1";
+  const currentUser = "User1"; // Simulated user tracking
 
   useEffect(() => {
     setWindowSize({
@@ -84,12 +92,14 @@ export default function VirtualizedGrid() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const updateAllCells = (updatedData) => {
+  // Function to update only affected formula cells
+  const updateDependentCells = (updatedData, modifiedKey) => {
     let newData = { ...updatedData };
 
     Object.keys(newData).forEach((key) => {
-      const { formula } = newData[key];
-      newData[key].value = evaluateFormula(formula, newData);
+      if (newData[key].formula?.includes(modifiedKey)) {
+        newData[key].value = evaluateFormula(newData[key].formula, newData);
+      }
     });
 
     return newData;
@@ -115,13 +125,28 @@ export default function VirtualizedGrid() {
           previousValues: [
             ...(newData[key]?.previousValues || []),
             { value: prevValue, modifiedAt: timestamp, author: currentUser },
-          ].slice(-5), // Keep only last 5 changes
+          ].slice(-5),
         };
 
-        return updateAllCells(newData);
+        return updateDependentCells(newData, key);
       });
 
       setEditingCell(null);
+    }
+  };
+
+  const handleKeyNavigation = (e, rowIndex, columnIndex) => {
+    if (e.key === "Enter") {
+      commitCellValue();
+      setEditingCell({ row: rowIndex + 1, col: columnIndex });
+      setInputValue(cellData[`${rowIndex + 1}:${columnIndex}`]?.formula || "");
+      e.preventDefault();
+    }
+    if (e.key === "Tab") {
+      commitCellValue();
+      setEditingCell({ row: rowIndex, col: columnIndex + 1 });
+      setInputValue(cellData[`${rowIndex}:${columnIndex + 1}`]?.formula || "");
+      e.preventDefault();
     }
   };
 
@@ -163,48 +188,39 @@ export default function VirtualizedGrid() {
             }
           }}
         >
-          {isEditing && (
+          {isEditing ? (
             <input
               autoFocus
               className="w-full h-full border-none outline-none text-center"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onBlur={commitCellValue}
+              onKeyDown={(e) => handleKeyNavigation(e, rowIndex, columnIndex)}
             />
+          ) : isHeaderRow ? (
+            getColumnLabel(columnIndex - 1)
+          ) : isHeaderColumn ? (
+            rowIndex
+          ) : (
+            cellValue
           )}
 
-          {!isEditing && isHeaderRow && getColumnLabel(columnIndex - 1)}
-          {!isEditing && !isHeaderRow && isHeaderColumn && rowIndex}
-          {!isEditing && !isHeaderRow && !isHeaderColumn && cellValue}
-
-          {/* Last Modified Tooltip */}
-          {/* {!isEditing && cell.lastModified && (
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-xs text-gray-500">
-              {new Date(cell.lastModified).toLocaleTimeString()} by{" "}
-              {cell.author}
-            </div>
-          )} */}
-
+          {/* History Popup */}
           {historyCell?.row === rowIndex &&
             historyCell?.col === columnIndex && (
-              <div
-                className="absolute top-10 left-0 bg-white border border-gray-400 shadow-md p-2 text-xs rounded-lg w-48 z-50"
-                onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-              >
+              <div className="absolute top-10 left-0 bg-white border border-gray-400 shadow-md p-2 text-xs rounded-lg w-48 z-50">
                 <div className="font-bold mb-1">Edit History</div>
                 {cell.previousValues.length > 0 ? (
                   cell.previousValues.map((entry, index) => (
                     <div key={index} className="border-b py-1">
-                      <span className="text-gray-600">Value:</span>{" "}
-                      {entry.value} <br />
-                      <span className="text-gray-600">By:</span> {entry.author}{" "}
-                      <br />
-                      <span className="text-gray-600">At:</span>{" "}
+                      <span>Value:</span> {entry.value} <br />
+                      <span>By:</span> {entry.author} <br />
+                      <span>At:</span>{" "}
                       {new Date(entry.modifiedAt).toLocaleTimeString()}
                     </div>
                   ))
                 ) : (
-                  <div className="text-gray-500">No history available</div>
+                  <div>No history available</div>
                 )}
                 <button
                   className="mt-2 w-full bg-gray-300 text-black py-1 rounded"
