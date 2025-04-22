@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Excel from "./components/Excel";
+import Timer from "./components/timer/Timer";
+// import ZetaLayout from "./components/zeta/ZetaLayout";
 
 const Home = () => {
   return (
     <div className="flex flex-col h-screen w-screen">
-      <Excel />
+      {/* <ZetaLayout /> */}
+      <Timer />
     </div>
   );
 };

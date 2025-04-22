@@ -1,0 +1,28 @@
+.layout{
+    height: 100svh;
+    width: 100svw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.body{
+    display: flex;
+    padding: 2rem;
+}
+
+button{
+ 
+}
+
+.start-btn{
+    background-color: green;
+    padding: 1rem;
+    margin: 1rem;
+}
+
+.stop-btn{
+    background-color: red;
+    padding: 1rem;
+    margin: 1rem;
+}

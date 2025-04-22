@@ -14,7 +14,8 @@
     "react-dom": "^19.0.0",
     "react-virtualized": "^9.22.6",
     "react-virtualized-auto-sizer": "^1.0.25",
-    "react-window": "^1.8.11"
+    "react-window": "^1.8.11",
+    "use-debounce": "^10.0.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
